@@ -37,5 +37,3 @@ The packed extension will be available in the `dist` folder.
 
 The core logic and structure of the widget are located in:
 - `Notification_Widget/app/widget.html`: Main UI and logic.
-- `Notification_Widget/app/style.css`: Styling (if applicable).
-- `Notification_Widget/server/`: Backend/Server-side components (if applicable).
