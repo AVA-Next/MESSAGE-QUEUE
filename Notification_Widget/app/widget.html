@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Message Queue Notifications</title>
+  <script src="https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js"></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #f0f2f5;
+      color: #1a1d23;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #0f62fe 0%, #0353e9 100%);
+      color: #fff;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 12px rgba(15, 98, 254, 0.4);
+      flex-shrink: 0;
+    }
+
+    .header-icon {
+      width: 34px;
+      height: 34px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+    }
+
+    .header-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .header-sub {
+      font-size: 11px;
+      opacity: 0.72;
+      margin-top: 1px;
+    }
+
+    .badge {
+      margin-left: auto;
+      background: #ff3b3b;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 22px;
+      height: 22px;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px;
+      opacity: 0;
+      transform: scale(0.6);
+      transition: opacity .2s, transform .2s;
+    }
+
+    .badge.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      background: #fff;
+      border-bottom: 1px solid #e4e7ec;
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11.5px;
+      color: #6b7280;
+      flex-shrink: 0;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #d1d5db;
+      flex-shrink: 0;
+      transition: background .4s;
+    }
+
+    .dot.active {
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e99;
+    }
+
+    .dot.pulse {
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 #22c55e55;
+      }
+
+      50% {
+        box-shadow: 0 0 0 5px #22c55e00;
+      }
+    }
+
+    .dot.error {
+      background: #ef4444;
+    }
+
+    .poll-timer {
+      margin-left: auto;
+      font-size: 10.5px;
+      color: #9ca3af;
+    }
+
+    /* Hide scrollbar but keep scroll working */
+    .list-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 14px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+
+      /* Firefox */
+      scrollbar-width: none;
+
+      /* IE / old Edge */
+      -ms-overflow-style: none;
+    }
+
+    /* Chrome, Safari, Edge */
+    .list-wrap::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: #9ca3af;
+      padding: 30px 20px;
+    }
+
+    .empty-state svg {
+      opacity: 0.4;
+    }
+
+    .empty-state p {
+      font-size: 12.5px;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* ── Notification card ── */
+    .notif-card {
+      background: #fff;
+      border: 1px solid #e4e7ec;
+      border-left: 4px solid #0f62fe;
+      /* accent — no overflow:hidden needed */
+      border-radius: 12px;
+      padding: 13px 15px;
+      display: flex;
+      gap: 11px;
+      align-items: flex-start;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+      animation: slideIn .3s cubic-bezier(.34, 1.56, .64, 1) both;
+      transition: opacity .3s, transform .3s;
+    }
+
+    .notif-card.removing {
+      opacity: 0;
+      transform: translateX(40px) scale(0.97);
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-12px) scale(0.97);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    .notif-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #eff4ff, #dbeafe);
+      border: 1px solid #bfdbfe;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .notif-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .notif-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .open-chip {
+      background: #fef3c7;
+      color: #b45309;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 20px;
+      border: 1px solid #fde68a;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    /* ── Fields ── */
+    .fields {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .field-row {
+      display: flex;
+      gap: 6px;
+      font-size: 12px;
+      line-height: 1.45;
+      align-items: flex-start;
+    }
+
+    .field-lbl {
+      font-weight: 600;
+      color: #6b7280;
+      flex-shrink: 0;
+      min-width: 58px;
+    }
+
+    .field-val {
+      color: #111827;
+      word-break: break-word;
+    }
+
+    .field-val.empty {
+      color: #9ca3af;
+      font-style: italic;
+    }
+
+    /* Task link */
+    .task-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: #0f62fe;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color .15s;
+    }
+
+    .task-link:hover {
+      color: #0353e9;
+      text-decoration: underline;
+    }
+
+    .notif-time {
+      font-size: 10px;
+      color: #9ca3af;
+      margin-top: 7px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* ── Mark as Read button ── */
+    .mark-read-btn {
+      flex-shrink: 0;
+      align-self: center;
+      background: none;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #9ca3af;
+      transition: border-color .15s, color .15s, background .15s, transform .1s;
+      position: relative;
+      z-index: 1;
+    }
+
+    .mark-read-btn:hover {
+      border-color: #22c55e;
+      color: #22c55e;
+      background: #f0fdf4;
+      transform: scale(1.08);
+    }
+
+    .mark-read-btn:active {
+      transform: scale(0.95);
+    }
+
+    .mark-read-btn.loading {
+      pointer-events: none;
+      color: #d1d5db;
+      border-color: #e5e7eb;
+    }
+
+    .mark-read-btn title-tip {
+      display: none;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      padding: 10px 14px;
+      border-top: 1px solid #e4e7ec;
+      background: #fff;
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 9px 0;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn-danger {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .btn-danger:hover {
+      background: #fecaca;
+    }
+
+    .btn-primary {
+      background: #0f62fe;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #0353e9;
+    }
+
+    /* ── Toast ── */
+    #toast-wrap {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: #111827;
+      color: #fff;
+      padding: 11px 15px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 210px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      animation: tIn .3s cubic-bezier(.34, 1.56, .64, 1) both;
+      pointer-events: auto;
+    }
+
+    .toast.out {
+      animation: tOut .28s ease forwards;
+    }
+
+    @keyframes tIn {
+      from {
+        opacity: 0;
+        transform: translateX(36px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    @keyframes tOut {
+      to {
+        opacity: 0;
+        transform: translateX(36px);
+      }
+    }
+
+    .t-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      flex-shrink: 0;
+    }
+
+    /* spinner */
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .spinner {
+      animation: spin .7s linear infinite;
+    }
+
+    /* ── Header action buttons ── */
+    .header-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mark-all-btn {
+      background: rgba(255, 255, 255, 0.18);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 7px;
+      padding: 5px 11px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: background .15s, transform .1s;
+      white-space: nowrap;
+    }
+
+    .mark-all-btn:hover {
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    .mark-all-btn:active {
+      transform: scale(0.96);
+    }
+
+    /* ── Refresh button in status bar ── */
+    .refresh-btn {
+      margin-left: 6px;
+      background: #f9fafb;
+      /* very light */
+      border: 1px solid #e5e7eb;
+      /* soft border */
+      border-radius: 6px;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #6b7280;
+      transition: all 0.15s ease;
+      padding: 0;
+    }
+
+    .refresh-btn:hover {
+      background: #f3f4f6;
+      border-color: #d1d5db;
+      color: #374151;
+    }
+
+    .refresh-btn:active {
+      transform: scale(0.92);
+    }
+
+    .refresh-btn.spinning svg {
+      animation: spin 0.7s linear;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">📬</div>
+    <div>
+      <div class="header-title">Message Queue</div>
+      <div class="header-sub">Open Messages</div>
+    </div>
+    <div class="header-actions">
+      <div class="badge" id="badge">0</div>
+      <button class="mark-all-btn" onclick="markAllRead()" title="Mark all as read">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <path d="M2 8l4 4L14 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+        Mark All Read
+      </button>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="dot" id="dot"></div>
+    <span id="status-txt">Initialising…</span>
+    <button class="refresh-btn" id="refresh-btn" title="Refresh now" onclick="manualRefresh()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+        <path d="M20 12a8 8 0 10-2.5 5.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        <path d="M20 5v5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+    <span class="poll-timer" id="poll-timer"></span>
+  </div>
+
+  <!-- List -->
+  <div class="list-wrap" id="list">
+    <div class="empty-state" id="empty">
+      <svg width="48" height="48" fill="none" viewBox="0 0 48 48">
+        <rect x="7" y="13" width="34" height="26" rx="5" stroke="#9ca3af" stroke-width="2" />
+        <path d="M7 19l17 11 17-11" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" />
+      </svg>
+      <p>No open messages.<br />All caught up! 🎉</p>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toast-wrap"></div>
+
+  <script>
+    // ─── Config ────────────────────────────────────────────────────────────────
+    const ORG_ID = '7006341939';
+    const CANVAS_ID = '108907000000800429';
+    const MODULE = 'Message_Queue';
+    // Removed auto-refresh INTERVAL as requested
+
+    // ─── State ─────────────────────────────────────────────────────────────────
+    let timerRef = null;
+
+    // ─── Helpers ───────────────────────────────────────────────────────────────
+    function relativeTime(dateStr) {
+      const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+      if (diff < 5) return 'just now';
+      if (diff < 60) return diff + 's ago';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return new Date(dateStr).toLocaleDateString();
+    }
+
+    function taskUrl(taskId) {
+      return `https://crm.zoho.com.au/crm/org${ORG_ID}/tab/CustomModule2/${taskId}/canvas/${CANVAS_ID}`;
+    }
+
+    function setStatus(state, text) {
+      const dot = document.getElementById('dot');
+      const txt = document.getElementById('status-txt');
+      dot.className = 'dot' + (state === 'ok' ? ' active pulse' : state === 'error' ? ' error' : '');
+      txt.textContent = text;
+    }
+
+    function updateBadge() {
+      const count = document.querySelectorAll('.notif-card').length;
+      const el = document.getElementById('badge');
+      el.textContent = count > 99 ? '99+' : count;
+      el.classList.toggle('visible', count > 0);
+    }
+
+    function showEmpty() {
+      if (!document.getElementById('empty') && document.querySelectorAll('.notif-card').length === 0) {
+        const div = document.createElement('div');
+        div.className = 'empty-state';
+        div.id = 'empty';
+        div.innerHTML = `
+            <svg width="48" height="48" fill="none" viewBox="0 0 48 48">
+              <rect x="7" y="13" width="34" height="26" rx="5" stroke="#9ca3af" stroke-width="2"/>
+              <path d="M7 19l17 11 17-11" stroke="#9ca3af" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <p>No open messages.<br/>All caught up! 🎉</p>`;
+        document.getElementById('list').appendChild(div);
+      }
+    }
+
+    // ─── Mark single record as Read ────────────────────────────────────────────
+    function markOneRead(recordId, btn) {
+      btn.classList.add('loading');
+      btn.innerHTML = `<svg class="spinner" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <circle cx="7" cy="7" r="5.5" stroke="#d1d5db" stroke-width="2"/>
+          <path d="M7 1.5A5.5 5.5 0 0112.5 7" stroke="#6b7280" stroke-width="2" stroke-linecap="round"/>
+        </svg>`;
+
+      ZOHO.CRM.API.updateRecord({
+        Entity: MODULE,
+        APIData: { id: recordId, Status: 'Read' },
+        Trigger: []
+      }).then(function (resp) {
+        if (resp && resp.data && resp.data[0].code === "SUCCESS") {
+          const card = document.querySelector(`.notif-card[data-id="${recordId}"]`);
+          if (card) {
+            card.classList.add('removing');
+            setTimeout(() => {
+              card.remove();
+              updateBadge();
+              showEmpty();
+            }, 320);
+          }
+          toast('✓ Marked as read');
+          // Wait 5s before refreshing to allow CRM index to catch up
+          setTimeout(fetchOpenRecords, 5000);
+        } else {
+          btn.classList.remove('loading');
+          btn.innerHTML = checkIcon();
+          toast('⚠️ API Error — please retry');
+        }
+      }).catch(function (err) {
+        btn.classList.remove('loading');
+        btn.innerHTML = checkIcon();
+        toast('⚠️ Failed — please retry');
+        console.error('Update error:', err);
+      });
+    }
+
+    // ─── Mark ALL open records as Read ─────────────────────────────────────────
+    function markAllRead() {
+      const cards = document.querySelectorAll('.notif-card');
+      if (!cards.length) return;
+
+      const ids = [...cards].map(c => c.dataset.id);
+      let successCount = 0;
+
+      const btn = document.querySelector('.mark-all-btn');
+      if (btn) btn.disabled = true;
+
+      const promises = ids.map(id => {
+        return ZOHO.CRM.API.updateRecord({
+          Entity: MODULE,
+          APIData: { id: id, Status: 'Read' },
+          Trigger: []
+        }).then(resp => {
+          if (resp && resp.data && resp.data[0].code === "SUCCESS") {
+            successCount++;
+          }
+        }).catch(err => console.error(err));
+      });
+
+      Promise.all(promises).then(() => {
+        if (btn) btn.disabled = false;
+        if (successCount > 0) {
+          toast(`✓ ${successCount} marked as read`);
+          // Remove all cards locally for instant feedback
+          cards.forEach(c => {
+            c.classList.add('removing');
+            setTimeout(() => c.remove(), 320);
+          });
+          setTimeout(() => { updateBadge(); showEmpty(); }, 350);
+        }
+      });
+    }
+
+    // ─── SVG icon ──────────────────────────────────────────────────────────────
+    function checkIcon() {
+      return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+    }
+
+    // ─── Render card ───────────────────────────────────────────────────────────
+    function renderCard(rec) {
+      document.getElementById('empty')?.remove();
+
+      const msgVal = rec.Message || '';
+      const taskObj = rec.Task;
+      const taskId = taskObj ? taskObj.id : null;
+      const taskName = taskObj ? taskObj.name : '';
+      const createdAt = rec.Created_Time || new Date().toISOString();
+
+      const taskHtml = taskId
+        ? `<a class="task-link" href="${taskUrl(taskId)}" target="_blank">
+               ${taskName || taskId}
+               <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                 <path d="M2 10L10 2M10 2H5M10 2v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+               </svg>
+             </a>`
+        : `<span class="field-val empty">—</span>`;
+
+      const card = document.createElement('div');
+      card.className = 'notif-card';
+      card.dataset.id = rec.id;
+      card.innerHTML = `
+          <div class="notif-icon">📨</div>
+          <div class="notif-body">
+            <div class="notif-title">
+              New Message
+              <span class="open-chip">Open</span>
+            </div>
+            <div class="fields">
+              <div class="field-row">
+                <span class="field-lbl">Message:</span>
+                <span class="field-val ${msgVal ? '' : 'empty'}">${msgVal || '—'}</span>
+              </div>
+              <div class="field-row">
+                <span class="field-lbl">Task:</span>
+                ${taskHtml}
+              </div>
+            </div>
+            <div class="notif-time">
+              🕐 <span class="ts" data-created="${createdAt}">${relativeTime(createdAt)}</span>
+            </div>
+          </div>
+          <button class="mark-read-btn" title="Mark as Read" onclick="markOneRead('${rec.id}', this)">
+            ${checkIcon()}
+          </button>`;
+
+      // Insert newest at top
+      const list = document.getElementById('list');
+      list.appendChild(card); // Simple: append in order (fetchPage already handles paging)
+    }
+
+    // ─── Toast ─────────────────────────────────────────────────────────────────
+    function toast(msg) {
+      const wrap = document.getElementById('toast-wrap');
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.innerHTML = `<div class="t-dot"></div>${msg}`;
+      wrap.appendChild(el);
+      setTimeout(() => {
+        el.classList.add('out');
+        setTimeout(() => el.remove(), 300);
+      }, 3000);
+    }
+
+    // Refresh timestamps
+    setInterval(() => {
+      document.querySelectorAll('.ts[data-created]').forEach(el => {
+        el.textContent = relativeTime(el.dataset.created);
+      });
+    }, 60_000);
+
+    function fetchOpenRecords() {
+      setStatus('ok', 'Refreshing…');
+      // Clear current list to ensure "hard refresh" feel and remove any non-Open records
+      const list = document.getElementById('list');
+      if (list) list.innerHTML = "";
+      fetchPage(1, []);
+    }
+
+    function fetchPage(page, accumulated) {
+      ZOHO.CRM.API.searchRecord({
+        Entity: MODULE,
+        Type: 'criteria',
+        Query: '(Status:equals:Open)',
+        page: page,
+        per_page: 200
+      }).then(function (resp) {
+        const records = (resp && resp.data) ? resp.data : [];
+        const all = accumulated.concat(records);
+
+        if (records.length === 200) {
+          fetchPage(page + 1, all);
+        } else {
+          applyRecords(all);
+        }
+      }).catch(function (err) {
+        setStatus('error', 'Error fetching records');
+        console.error('Poll error:', err);
+      });
+    }
+
+    function applyRecords(records) {
+      setStatus('ok', 'Live · Showing open messages');
+      const list = document.getElementById('list');
+      if (list) list.innerHTML = "";
+
+      if (records.length === 0) {
+        showEmpty();
+      } else {
+        records.forEach(r => renderCard(r));
+      }
+
+      updateBadge();
+    }
+
+    function startCountdown() {
+      // Auto-refresh disabled as requested
+    }
+
+    // ─── SDK Init ──────────────────────────────────────────────────────────────
+    ZOHO.embeddedApp.on('PageLoad', function () {
+      fetchOpenRecords();
+    });
+
+    ZOHO.embeddedApp.init().catch(function (err) {
+      setStatus('error', 'SDK init failed');
+      console.error(err);
+    });
+    function manualRefresh() {
+      const btn = document.getElementById('refresh-btn');
+      btn.classList.add('spinning');
+      fetchOpenRecords();
+      setTimeout(() => {
+        btn.classList.remove('spinning');
+      }, 700);
+    }
+    function updateScrollIndicator() {
+      const list = document.getElementById('list');
+      const indicator = document.getElementById('scroll-indicator');
+
+      if (!list || !indicator) return;
+
+      const isScrollable = list.scrollHeight > list.clientHeight;
+      const isAtBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 5;
+
+      if (isScrollable && !isAtBottom) {
+        indicator.classList.add('visible');
+      } else {
+        indicator.classList.remove('visible');
+      }
+    }
+
+    // Run on scroll
+    document.getElementById('list').addEventListener('scroll', updateScrollIndicator);
+
+    // Run after render
+    setInterval(updateScrollIndicator, 500);
+  </script>
+  <div id="scroll-indicator">↓</div>
+  <style>
+    #scroll-indicator {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 16px;
+      color: #9ca3af;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    #scroll-indicator.visible {
+      opacity: 1;
+    }
+  </style>
+</body>
+
+</html>
